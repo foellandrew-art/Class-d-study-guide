@@ -3,361 +3,241 @@
 <head>
   <meta charset="UTF-8" />
   <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
+    name="viewport" content="width=device-width, initial-scale=1.0"
   />
-  <title>MN Class D Master</title>
+  <title>MN Class D Master — GDL & Study Hub</title>
 
   <!-- Tailwind CSS (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Inline Firebase config (REPLACE with your real values) -->
-  <script>
-    // TODO: Replace with your Firebase Web app config (these keys are public for web apps)
-    window.APP_CONFIG = {
-      VITE_FIREBASE_API_KEY: 'YOUR_API_KEY_HERE',
-      VITE_FIREBASE_AUTH_DOMAIN: 'YOUR_PROJECT_ID.firebaseapp.com',
-      VITE_FIREBASE_PROJECT_ID: 'YOUR_PROJECT_ID',
-      VITE_FIREBASE_APP_ID: 'YOUR_APP_ID_HERE'
-      // Optional extras if you use them:
-      // VITE_FIREBASE_MESSAGING_SENDER_ID: '...',
-      // VITE_FIREBASE_STORAGE_BUCKET: 'YOUR_PROJECT_ID.appspot.com'
-    };
-  </script>
-
   <!-- React 18 (UMD) -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-  <!-- Babel Standalone to run JSX in the browser (no bundler required) -->
+  <!-- Babel Standalone (so we can write JSX without a bundler) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Firebase v9 compat (namespaced API; works without bundlers) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet" />
 
-  <!-- Minimal helper style for slide animation used in your UI -->
   <style>
-    @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system; background: #f8fafc; color: #0f172a; }
+    @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .animate-slide-up { animation: slideUp .25s ease-out both; }
+    .u-icon { font-style: normal; display: inline-block; line-height: 1; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f1f5f9; border:1px solid #e2e8f0; border-bottom-width:2px; padding:.1rem .35rem; border-radius:.35rem;}
   </style>
 </head>
-<body class="max-w-md mx-auto min-h-screen p-4 bg-slate-50 font-sans">
+<body class="max-w-2xl mx-auto min-h-screen p-4 sm:p-6">
+
   <div id="root"></div>
 
-  <!-- App code (JSX) -->
   <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
 
-    const { useState, useEffect } = React;
-
-    // ----------------- Firebase init (reads from inline APP_CONFIG) -----------------
-    const cfg = window.APP_CONFIG || {};
-    let auth = null;
-    let db = null;
-    try {
-      if (
-        cfg.VITE_FIREBASE_API_KEY &&
-        cfg.VITE_FIREBASE_AUTH_DOMAIN &&
-        cfg.VITE_FIREBASE_PROJECT_ID &&
-        cfg.VITE_FIREBASE_APP_ID
-      ) {
-        firebase.initializeApp({
-          apiKey: cfg.VITE_FIREBASE_API_KEY,
-          authDomain: cfg.VITE_FIREBASE_AUTH_DOMAIN,
-          projectId: cfg.VITE_FIREBASE_PROJECT_ID,
-          appId: cfg.VITE_FIREBASE_APP_ID,
-        });
-        auth = firebase.auth();
-        db = firebase.firestore();
-      } else {
-        console.warn('Firebase config missing/incomplete. App will render without auth.');
-      }
-    } catch (e) {
-      console.error('Firebase init failed:', e);
-    }
-
-    // ----------------- Curriculum (from your snippet) -----------------
+    /*************************************************************************
+     * Data — 6 Chapters (expandable)
+     *************************************************************************/
     const CHAPTERS = [
       {
-        id: 1, title: "YOUR LICENSE TO DRIVE", manual: "Chapter 1", statute: "Minn. Stat. § 171.05",
-        content: "THE MINNESOTA GRADUATED DRIVER’S LICENSING (GDL) SYSTEM IS A RIGOROUS THREE-PHASE APPROACH... [Chapter 1 Content]",
-        insight: "VETERAN INSIGHT: THE 'BLUE CARD' IS YOUR GOLDEN TICKET.",
+        id: 1,
+        title: "Your License to Drive",
+        manual: "Chapter 1",
+        statute: "Minn. Stat. § 171.05",
+        summary: [
+          "Graduated Driver Licensing (GDL): Permit ➜ Provisional ➜ Class D.",
+          "Permit (15+): Knowledge test, vision, enrolled in driver ed; drive with 21+.",
+          "Provisional (16+): 6 months violation-free; 50 hrs practice (15 at night).",
+          "Restrictions: Night driving (12–5 AM), passenger limits (first 6 months).",
+          "Full Class D (18+ or 12 months clean provisional): No GDL restrictions.",
+        ],
         questions: [
-          { type: 'mc', q: "AT WHAT AGE CAN YOU APPLY FOR AN MN INSTRUCTION PERMIT?", options: ["14", "15", "16", "18"], a: 1 },
-          { type: 'tf', q: "TRUE OR FALSE: UNDER VANESSA'S LAW, YOU CAN LOSE PRIVILEGES UNTIL AGE 18 FOR A CRASH-RELATED VIOLATION.", a: true },
-          { type: 'fib', q: "A PERMIT HOLDER MUST BE ACCOMPANIED BY A LICENSED DRIVER AT LEAST blank YEARS OLD.", a: "21" }
-        ]
+          { type: "mc", q: "Minimum age to apply for an MN Instruction Permit?", options: ["14", "15", "16", "18"], a: 1 },
+          { type: "tf", q: "True/False: Under Vanessa's Law, a crash-related violation can delay licensing until 18.", a: true },
+          { type: "fib", q: "A permit holder must be accompanied by a licensed driver at least _____ years old.", a: "21" },
+          { type: "mc", q: "How many supervised hours are required (incl. night hours)?", options: ["30 (10 night)", "40 (10 night)", "50 (15 night)", "60 (20 night)"], a: 2 },
+        ],
       },
       {
-        id: 2, title: "YOUR VEHICLE", manual: "Chapter 2", statute: "Minn. Stat. § 169.46",
-        content: "MINNESOTA LAW REQUIRES THAT EVERY VEHICLE OPERATED ON PUBLIC STREETS BE EQUIPPED WITH SPECIFIC SAFETY FEATURES... [Chapter 2 Content]",
-        insight: "VETERAN INSIGHT: RAIN MEANS LIGHTS. MANUALLY TURN THEM ON.",
+        id: 2,
+        title: "Your Vehicle",
+        manual: "Chapter 2",
+        statute: "Minn. Stat. § 169.46",
+        summary: [
+          "Vehicle must be safe & properly equipped (lights, brakes, tires, mirrors).",
+          "Headlights required when visibility < 500 ft or when using wipers.",
+          "Tire tread depth legal minimum often cited as 1/16 inch (check wear bars).",
+          "Always clear windows of snow/ice before driving.",
+          "Turn on lights in rain, snow, fog—be seen early.",
+        ],
         questions: [
-          { type: 'mc', q: "MINIMUM LEGAL TIRE TREAD DEPTH IS:", options: ["1/32 INCH", "1/16 INCH", "1/8 INCH", "1/4 INCH"], a: 1 },
-          { type: 'tf', q: "TRUE OR FALSE: YOU MUST TURN ON HEADLIGHTS IF VISIBILITY IS LESS THAN 500 FEET.", a: true }
-        ]
-      }
-      // You can add more chapters here as you expand the curriculum
+          { type: "mc", q: "Minimum legal tire tread depth commonly cited?", options: ["1/32 in", "1/16 in", "1/8 in", "1/4 in"], a: 1 },
+          { type: "tf", q: "True/False: Headlights required if visibility is under 500 feet.", a: true },
+          { type: "fib", q: "Use headlights whenever you use your ______.", a: "wipers" },
+          { type: "mc", q: "Before driving in winter, you should", options: ["Scrape windshield only", "Clear all windows & lights", "Warm engine only", "Drive slowly with snow on roof"], a: 1 },
+        ],
+      },
+      {
+        id: 3,
+        title: "Traffic Control & Signs",
+        manual: "Chapter 3",
+        statute: "Minn. Stat. § 169.06",
+        summary: [
+          "Obey traffic control devices (signs, signals, markings).",
+          "Red = stop; Yellow = prepare to stop; Green = go if safe.",
+          "Stop/yield signs control right-of-way at intersections.",
+          "Regulatory signs (white/black) are laws; warning signs (yellow) advise.",
+          "Lane control & pavement markings guide turns and passing.",
+        ],
+        questions: [
+          { type: "mc", q: "A flashing red signal means:", options: ["Proceed with caution", "Stop, then proceed", "Stop & wait for green", "Yield only"], a: 1 },
+          { type: "tf", q: "True/False: Yellow lines separate traffic moving in opposite directions.", a: true },
+          { type: "fib", q: "A white rectangular sign with black letters is usually a ______ sign.", a: "regulatory" },
+          { type: "mc", q: "At a steady yellow light you should:", options: ["Speed up", "Prepare to stop if safe", "Stop immediately no matter what", "Turn on hazard lights"], a: 1 },
+        ],
+      },
+      {
+        id: 4,
+        title: "Right‑of‑Way & Sharing the Road",
+        manual: "Chapter 4",
+        statute: "Minn. Stat. § 169.20",
+        summary: [
+          "Uncontrolled intersections: yield to the vehicle on your right.",
+          "Pedestrians in crosswalks have right‑of‑way; yield to pedestrians.",
+          "Yield to emergency vehicles with lights/sirens—pull to right & stop.",
+          "Zipper Merge: take turns at the merge point in congestion.",
+          "Give cyclists 3 feet when passing; watch for trucks’ big No‑Zones.",
+        ],
+        questions: [
+          { type: "mc", q: "At an uncontrolled intersection arriving together, who yields?", options: ["Driver on right yields", "Driver on left yields", "Neither yields", "Faster vehicle goes first"], a: 1 },
+          { type: "tf", q: "True/False: You must stop for a pedestrian in a marked crosswalk.", a: true },
+          { type: "fib", q: "On a Zipper Merge, drivers should take ______ at the merge point.", a: "turns" },
+          { type: "mc", q: "Minimum safe distance when passing a cyclist?", options: ["1 ft", "2 ft", "3 ft", "5 ft"], a: 2 },
+        ],
+      },
+      {
+        id: 5,
+        title: "Speed, Space & Safe Driving Practices",
+        manual: "Chapter 5",
+        statute: "Minn. Stat. § 169.14",
+        summary: [
+          "Basic Speed Law: Never drive faster than conditions allow.",
+          "Increase following distance in rain/snow/ice and behind trucks.",
+          "Signal at least 100 ft before turns; check mirrors & blind spots.",
+          "Stopping distance = perception + reaction + braking—rises with speed.",
+          "Avoid distractions; keep eyes moving, leave yourself an out.",
+        ],
+        questions: [
+          { type: "mc", q: "Basic Speed Law means you must:", options: ["Drive at limit always", "Adjust to conditions", "Match traffic only", "Use cruise control"], a: 1 },
+          { type: "tf", q: "True/False: Stopping distance increases as speed increases.", a: true },
+          { type: "fib", q: "Signal at least ______ feet before turning.", a: "100" },
+          { type: "mc", q: "Best following distance on wet roads?", options: ["2 seconds", "3 seconds", "4+ seconds", "1 second"], a: 2 },
+        ],
+      },
+      {
+        id: 6,
+        title: "Adverse Conditions & Impairment",
+        manual: "Chapter 6",
+        statute: "Minn. Stat. §§ 169A & 169.13",
+        summary: [
+          "Hydroplaning can start ~35 mph; ease off gas, don’t brake hard.",
+          "Fog: low‑beam headlights; increase following distance.",
+          "DWI limit 0.08 for 21+; 'Not a Drop' for under 21 (zero tolerance).",
+          "Implied consent: test refusal triggers penalties.",
+          "Never drive under influence of alcohol, drugs, or impairing meds.",
+        ],
+        questions: [
+          { type: "mc", q: "Hydroplaning can begin around:", options: ["25 mph", "35 mph", "45 mph", "55 mph"], a: 1 },
+          { type: "tf", q: "True/False: Use high beams in fog for better visibility.", a: false },
+          { type: "fib", q: "Under 21, the 'Not a Drop' law means a BAC of _____ is unlawful.", a: "any" },
+          { type: "mc", q: "If you start to hydroplane, you should:", options: ["Brake hard", "Steer left quickly", "Ease off gas, steer straight", "Accelerate"], a: 2 },
+        ],
+      },
     ];
 
-    // ----------------- React App -----------------
-    function App() {
-      const [user, setUser] = useState(null);
-      const [view, setView] = useState('dash');
-      const [certs, setCerts] = useState({});
-      const [activeChapter, setActiveChapter] = useState(null);
-      const [session, setSession] = useState(null);
-      const [feedback, setFeedback] = useState(null);
-      const [timer, setTimer] = useState(1800);
-      const appId = 'mn-class-d-master';
+    /*************************************************************************
+     * Utilities
+     *************************************************************************/
+    const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+    const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+    const STORAGE_KEY = "mncd_progress_v1";
 
-      // Auth: anonymous by default (or custom token if window.__initial_auth_token is provided)
-      useEffect(() => {
-        if (!auth) return;
-        let unsub = () => {};
-        (async () => {
-          try {
-            if (window.__initial_auth_token) {
-              await auth.signInWithCustomToken(window.__initial_auth_token);
-            } else {
-              await auth.signInAnonymously();
-            }
-          } catch (err) {
-            console.error('Auth failed', err);
-          }
-          unsub = auth.onAuthStateChanged(setUser);
-        })();
-        return () => (unsub && unsub());
-      }, []);
+    const loadProgress = () => {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { certified: {} }; }
+      catch { return { certified: {} }; }
+    };
+    const saveProgress = (data) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data || { certified: {} }));
+    };
 
-      // Firestore sync for progress
-      useEffect(() => {
-        if (!user || !db) return;
-        const progressDoc = db
-          .collection('artifacts').doc(appId)
-          .collection('users').doc(user.uid)
-          .collection('settings').doc('progress');
-
-        const unsub = progressDoc.onSnapshot(
-          (snap) => {
-            if (snap.exists) {
-              const data = snap.data() || {};
-              setCerts(data.certified || {});
-            }
-          },
-          (err) => console.error('Firestore error:', err)
-        );
-
-        return () => (unsub && unsub());
-      }, [user]);
-
-      async function saveProgress(updatedCerts) {
-        if (!user || !db) return;
-        const progressDoc = db
-          .collection('artifacts').doc(appId)
-          .collection('users').doc(user.uid)
-          .collection('settings').doc('progress');
-        await progressDoc.set({ certified: updatedCerts }, { merge: true });
-      }
-
-      function startTest(type, chapterId = null) {
-        let pool = [];
-        if (type === 'unit') {
-          const c = CHAPTERS.find(x => x.id === chapterId);
-          pool = [...(c?.questions || [])].sort(() => Math.random() - 0.5);
-        } else {
-          const allQ = CHAPTERS.flatMap(c => c.questions);
-          const size = type === 'mock' ? 20 : 50;
-          pool = allQ.sort(() => Math.random() - 0.5).slice(0, size);
-        }
-
-        setTimer(1800);
-        setSession({
-          type, chapterId, questions: pool, index: 0, score: 0,
-          incorrect: [], startTime: Date.now()
-        });
-        setFeedback(null);
-        setView(type === 'unit' ? 'review' : 'test');
-      }
-
-      function checkTermination(nextScore, nextIncorrect) {
-        const total = session.questions.length;
-        const target = Math.ceil(total * 0.8);
-        const failMax = total - target;
-
-        if (nextScore >= target) endSession(true, nextScore, nextIncorrect);
-        else if (nextIncorrect.length > failMax || session.index + 1 >= total) endSession(false, nextScore, nextIncorrect);
-        else setSession({ ...session, index: session.index + 1, score: nextScore, incorrect: nextIncorrect });
-      }
-
-      function endSession(passed, score, incorrects) {
-        if (passed && session.type === 'unit') {
-          const newCerts = { ...certs, [session.chapterId]: true };
-          setCerts(newCerts);
-          saveProgress(newCerts);
-        }
-        setSession(prev => ({ ...prev, passed, score, incorrect: incorrects }));
-        setView('audit');
-      }
-
-      function handleAnswer(val) {
-        if (feedback) return;
-        const q = session.questions[session.index];
-        const isCorrect = q.type === 'fib'
-          ? String(val).toLowerCase().trim() === String(q.a).toLowerCase()
-          : val === q.a;
-
-        const nextScore = isCorrect ? session.score + 1 : session.score;
-        const nextIncorrect = isCorrect ? session.incorrect : [
-          ...session.incorrect,
-          {
-            q: q.q,
-            your: q.options ? q.options[val] : String(val),
-            correct: q.options ? q.options[q.a] : String(q.a),
-            statute: (CHAPTERS.find(c => c.questions.some(sq => sq.q === q.q))?.statute) || 'MN STATUTE'
-          }
-        ];
-
-        if (session.type === 'mock') {
-          checkTermination(nextScore, nextIncorrect);
-        } else {
-          setFeedback({ isCorrect, nextScore, nextIncorrect });
-        }
-      }
-
-      // ----------------- UI -----------------
+    /*************************************************************************
+     * Components
+     *************************************************************************/
+    function Header({ userLike, onReset }) {
       return (
-        <div className="min-h-screen">
-          {/* Header / Auth Status */}
-          <div className="flex justify-between items-center mb-6 px-2">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-              {auth ? (user ? `Cloud Active: ${String(user.uid).substring(0, 8)}...` : 'Connecting...') : 'Auth disabled (no Firebase config)'}
-            </div>
+        <div className="flex justify-between items-center mb-6 px-1">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            {userLike ? `Local Save: ${userLike}` : "Local Save: Ready"}
           </div>
-
-          {view === 'dash' && (
-            <div className="space-y-6 animate-slide-up">
-              <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl">
-                <p className="text-[10px] font-black tracking-widest opacity-40 uppercase mb-4">MN CLASS D MASTER</p>
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h1 className="text-5xl font-black">
-                      {Object.keys(certs).length}
-                      <span className="text-xl opacity-20">/{CHAPTERS.length}</span>
-                    </h1>
-                    <p className="text-[10px] font-bold uppercase text-blue-400">Chapters Certified</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => startTest('mock')} className="bg-white p-6 rounded-[2rem] border border-slate-200 text-left active:scale-95 transition-all">
-                  <p className="font-black text-sm uppercase">State Mock</p>
-                  <p className="text-[10px] text-slate-400 font-bold">20 Q • 80% LIMIT</p>
-                </button>
-                <button onClick={() => startTest('practice')} className="bg-white p-6 rounded-[2rem] border border-slate-200 text-left active:scale-95 transition-all">
-                  <p className="font-black text-sm uppercase">50 Q Draw</p>
-                  <p className="text-[10px] text-slate-400 font-bold">RANDOM POOL</p>
-                </button>
-              </div>
-
-              {CHAPTERS.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => { setActiveChapter(c); setView('review'); }}
-                  className="w-full bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center active:scale-[0.98] transition-transform"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${certs[c.id] ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
-                      {certs[c.id] ? '✓' : c.id}
-                    </div>
-                    <div className="text-left">
-                      <p className="font-black text-slate-800 text-sm">{c.title}</p>
-                      <p className="text-[9px] text-slate-400 uppercase font-black">{c.manual}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {view === 'review' && activeChapter && (
-            <div className="space-y-6">
-              <button onClick={() => setView('dash')} className="text-[10px] font-black uppercase text-slate-400">← Back</button>
-              <div className="bg-white rounded-[2rem] p-8 border border-slate-200 space-y-4">
-                <h2 className="text-2xl font-black uppercase">{activeChapter.title}</h2>
-                <p className="text-sm text-slate-600 leading-relaxed">{activeChapter.content}</p>
-                <div className="bg-blue-50 p-4 rounded-2xl">
-                  <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Objective</p>
-                  <p className="text-sm font-bold text-blue-900">{activeChapter.insight}</p>
-                </div>
-              </div>
-              <button onClick={() => startTest('unit', activeChapter.id)} className="w-full bg-blue-600 text-white p-6 rounded-[1.5rem] font-black shadow-lg">START CERTIFICATION</button>
-            </div>
-          )}
-
-          {view === 'test' && session && (
-            <div className="space-y-6 pt-4">
-              <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase">
-                <span>Question {session.index + 1} / {session.questions.length}</span>
-                {session.type === 'mock' && <span className="text-red-500">Timer Active</span>}
-              </div>
-              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 text-center min-h-[150px] flex items-center justify-center">
-                <h3 className="text-xl font-black">{session.questions[session.index].q.replace('blank', '_______')}</h3>
-              </div>
-
-              {feedback ? (
-                <div className="space-y-4">
-                  <div className={`p-8 rounded-[2rem] border-2 text-center ${feedback.isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                    <p className="text-xl font-black">{feedback.isCorrect ? 'CORRECT' : 'INCORRECT'}</p>
-                    {!feedback.isCorrect && (
-                      <p className="text-sm mt-1">
-                        Answer: {feedback.nextIncorrect[feedback.nextIncorrect.length - 1].correct}
-                      </p>
-                    )}
-                  </div>
-                  <button onClick={() => checkTermination(feedback.nextScore, feedback.nextIncorrect)} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black">NEXT QUESTION</button>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {session.questions[session.index].type === 'mc' && session.questions[session.index].options.map((opt, i) => (
-                    <button key={i} onClick={() => handleAnswer(i)} className="bg-white p-5 rounded-2xl border border-slate-200 text-left font-bold text-sm active:bg-blue-50">{opt}</button>
-                  ))}
-                  {session.questions[session.index].type === 'tf' && [true, false].map((v, i) => (
-                    <button key={i} onClick={() => handleAnswer(v)} className="bg-white p-6 rounded-2xl border border-slate-200 font-black text-lg">{v ? 'TRUE' : 'FALSE'}</button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {view === 'audit' && session && (
-            <div className="space-y-6 pt-6">
-              <div className="text-center">
-                <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${session.passed ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                  <span className="text-2xl font-bold">{session.passed ? '✓' : '×'}</span>
-                </div>
-                <h2 className="text-3xl font-black uppercase">{session.passed ? 'Certified' : 'Retry'}</h2>
-                <p className="text-[10px] font-black text-slate-400 mt-1">{session.score} / {session.questions.length} CORRECT</p>
-              </div>
-              <div className="space-y-3">
-                {session.incorrect.map((item, i) => (
-                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200">
-                    <p className="font-bold text-xs mb-2">{item.q}</p>
-                    <div className="text-[10px] text-blue-600 font-bold uppercase">{item.statute} • CORRECT: {item.correct}</div>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => setView('dash')} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black uppercase text-sm">Return to Dash</button>
-            </div>
-          )}
+          <button
+            className="text-[10px] font-black uppercase text-rose-600 hover:text-rose-700"
+            onClick={onReset}
+            title="Clear saved certifications and progress"
+          >
+            Reset Progress
+          </button>
         </div>
       );
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
+    function ChapterCard({ chapter, certified, onOpen }) {
+      return (
+        <button
+          onClick={() => onOpen(chapter)}
+          className="w-full bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${certified ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
+              {certified ? '✓' : chapter.id}
+            </div>
+            <div className="text-left">
+              <p className="font-black text-slate-800 text-sm">{chapter.title}</p>
+              <p className="text-[9px] text-slate-400 uppercase font-black">{chapter.manual}</p>
+            </div>
+          </div>
+          <span className="text-slate-400 text-lg">›</span>
+        </button>
+      );
+    }
+
+    function ReviewBlock({ chapter }) {
+      return (
+        <div className="bg-white rounded-[2rem] p-6 sm:p-8 border border-slate-200 space-y-5">
+          <div>
+            <h2 className="text-2xl font-black uppercase">{chapter.title}</h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase">{chapter.manual} • {chapter.statute}</p>
+          </div>
+          <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl">
+            <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Study Summary</p>
+            <ul className="text-sm text-slate-700 space-y-2 list-disc pl-5">
+              {chapter.summary.map((line, idx) => <li key={idx}>{line}</li>)}
+            </ul>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Sample Questions</p>
+            <ul className="text-sm text-slate-700 space-y-1 list-disc pl-5">
+              {chapter.questions.slice(0, Math.min(3, chapter.questions.length)).map((q, idx) =>
+                <li key={idx}>{q.q.replace("blank", "_______")}</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
+    function QuestionBlock({ q, onAnswer }) {
+      // Render MC / TF / FIB (with input box)
+      const [fibValue, setFibValue] = useState("");
+      useEffect(() => { setFibValue(""); }, [q]);
+      return (
+        <div className="space-y-4">
