@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>MN Class D Master</title>
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Inline Firebase config (REPLACE with your real values) -->
+  <script>
+    // TODO: Replace with your Firebase Web app config (these keys are public for web apps)
+    window.APP_CONFIG = {
+      VITE_FIREBASE_API_KEY: 'YOUR_API_KEY_HERE',
+      VITE_FIREBASE_AUTH_DOMAIN: 'YOUR_PROJECT_ID.firebaseapp.com',
+      VITE_FIREBASE_PROJECT_ID: 'YOUR_PROJECT_ID',
+      VITE_FIREBASE_APP_ID: 'YOUR_APP_ID_HERE'
+      // Optional extras if you use them:
+      // VITE_FIREBASE_MESSAGING_SENDER_ID: '...',
+      // VITE_FIREBASE_STORAGE_BUCKET: 'YOUR_PROJECT_ID.appspot.com'
+    };
+  </script>
+
+  <!-- React 18 (UMD) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+  <!-- Babel Standalone to run JSX in the browser (no bundler required) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase v9 compat (namespaced API; works without bundlers) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- Minimal helper style for slide animation used in your UI -->
+  <style>
+    @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .animate-slide-up { animation: slideUp .25s ease-out both; }
+  </style>
+</head>
+<body class="max-w-md mx-auto min-h-screen p-4 bg-slate-50 font-sans">
+  <div id="root"></div>
+
+  <!-- App code (JSX) -->
+  <script type="text/babel">
+
+    const { useState, useEffect } = React;
+
+    // ----------------- Firebase init (reads from inline APP_CONFIG) -----------------
+    const cfg = window.APP_CONFIG || {};
+    let auth = null;
+    let db = null;
+    try {
+      if (
+        cfg.VITE_FIREBASE_API_KEY &&
+        cfg.VITE_FIREBASE_AUTH_DOMAIN &&
+        cfg.VITE_FIREBASE_PROJECT_ID &&
+        cfg.VITE_FIREBASE_APP_ID
+      ) {
+        firebase.initializeApp({
+          apiKey: cfg.VITE_FIREBASE_API_KEY,
+          authDomain: cfg.VITE_FIREBASE_AUTH_DOMAIN,
+          projectId: cfg.VITE_FIREBASE_PROJECT_ID,
+          appId: cfg.VITE_FIREBASE_APP_ID,
+        });
+        auth = firebase.auth();
+        db = firebase.firestore();
+      } else {
+        console.warn('Firebase config missing/incomplete. App will render without auth.');
+      }
+    } catch (e) {
+      console.error('Firebase init failed:', e);
+    }
+
+    // ----------------- Curriculum (from your snippet) -----------------
+    const CHAPTERS = [
+      {
+        id: 1, title: "YOUR LICENSE TO DRIVE", manual: "Chapter 1", statute: "Minn. Stat. § 171.05",
+        content: "THE MINNESOTA GRADUATED DRIVER’S LICENSING (GDL) SYSTEM IS A RIGOROUS THREE-PHASE APPROACH... [Chapter 1 Content]",
+        insight: "VETERAN INSIGHT: THE 'BLUE CARD' IS YOUR GOLDEN TICKET.",
+        questions: [
+          { type: 'mc', q: "AT WHAT AGE CAN YOU APPLY FOR AN MN INSTRUCTION PERMIT?", options: ["14", "15", "16", "18"], a: 1 },
+          { type: 'tf', q: "TRUE OR FALSE: UNDER VANESSA'S LAW, YOU CAN LOSE PRIVILEGES UNTIL AGE 18 FOR A CRASH-RELATED VIOLATION.", a: true },
+          { type: 'fib', q: "A PERMIT HOLDER MUST BE ACCOMPANIED BY A LICENSED DRIVER AT LEAST blank YEARS OLD.", a: "21" }
+        ]
+      },
+      {
+        id: 2, title: "YOUR VEHICLE", manual: "Chapter 2", statute: "Minn. Stat. § 169.46",
+        content: "MINNESOTA LAW REQUIRES THAT EVERY VEHICLE OPERATED ON PUBLIC STREETS BE EQUIPPED WITH SPECIFIC SAFETY FEATURES... [Chapter 2 Content]",
+        insight: "VETERAN INSIGHT: RAIN MEANS LIGHTS. MANUALLY TURN THEM ON.",
+        questions: [
+          { type: 'mc', q: "MINIMUM LEGAL TIRE TREAD DEPTH IS:", options: ["1/32 INCH", "1/16 INCH", "1/8 INCH", "1/4 INCH"], a: 1 },
+          { type: 'tf', q: "TRUE OR FALSE: YOU MUST TURN ON HEADLIGHTS IF VISIBILITY IS LESS THAN 500 FEET.", a: true }
+        ]
+      }
+      // You can add more chapters here as you expand the curriculum
+    ];
+
+    // ----------------- React App -----------------
+    function App() {
+      const [user, setUser] = useState(null);
+      const [view, setView] = useState('dash');
+      const [certs, setCerts] = useState({});
+      const [activeChapter, setActiveChapter] = useState(null);
+      const [session, setSession] = useState(null);
+      const [feedback, setFeedback] = useState(null);
+      const [timer, setTimer] = useState(1800);
+      const appId = 'mn-class-d-master';
+
+      // Auth: anonymous by default (or custom token if window.__initial_auth_token is provided)
+      useEffect(() => {
+        if (!auth) return;
+        let unsub = () => {};
+        (async () => {
+          try {
+            if (window.__initial_auth_token) {
+              await auth.signInWithCustomToken(window.__initial_auth_token);
+            } else {
+              await auth.signInAnonymously();
+            }
+          } catch (err) {
+            console.error('Auth failed', err);
+          }
+          unsub = auth.onAuthStateChanged(setUser);
+        })();
+        return () => (unsub && unsub());
+      }, []);
+
+      // Firestore sync for progress
+      useEffect(() => {
+        if (!user || !db) return;
+        const progressDoc = db
+          .collection('artifacts').doc(appId)
+          .collection('users').doc(user.uid)
+          .collection('settings').doc('progress');
+
+        const unsub = progressDoc.onSnapshot(
+          (snap) => {
+            if (snap.exists) {
+              const data = snap.data() || {};
+              setCerts(data.certified || {});
+            }
+          },
+          (err) => console.error('Firestore error:', err)
+        );
+
+        return () => (unsub && unsub());
+      }, [user]);
+
+      async function saveProgress(updatedCerts) {
+        if (!user || !db) return;
+        const progressDoc = db
+          .collection('artifacts').doc(appId)
+          .collection('users').doc(user.uid)
+          .collection('settings').doc('progress');
+        await progressDoc.set({ certified: updatedCerts }, { merge: true });
+      }
+
+      function startTest(type, chapterId = null) {
+        let pool = [];
+        if (type === 'unit') {
+          const c = CHAPTERS.find(x => x.id === chapterId);
+          pool = [...(c?.questions || [])].sort(() => Math.random() - 0.5);
+        } else {
+          const allQ = CHAPTERS.flatMap(c => c.questions);
+          const size = type === 'mock' ? 20 : 50;
+          pool = allQ.sort(() => Math.random() - 0.5).slice(0, size);
+        }
+
+        setTimer(1800);
+        setSession({
+          type, chapterId, questions: pool, index: 0, score: 0,
+          incorrect: [], startTime: Date.now()
+        });
+        setFeedback(null);
+        setView(type === 'unit' ? 'review' : 'test');
+      }
+
+      function checkTermination(nextScore, nextIncorrect) {
+        const total = session.questions.length;
+        const target = Math.ceil(total * 0.8);
+        const failMax = total - target;
+
+        if (nextScore >= target) endSession(true, nextScore, nextIncorrect);
+        else if (nextIncorrect.length > failMax || session.index + 1 >= total) endSession(false, nextScore, nextIncorrect);
+        else setSession({ ...session, index: session.index + 1, score: nextScore, incorrect: nextIncorrect });
+      }
+
+      function endSession(passed, score, incorrects) {
+        if (passed && session.type === 'unit') {
+          const newCerts = { ...certs, [session.chapterId]: true };
+          setCerts(newCerts);
+          saveProgress(newCerts);
+        }
+        setSession(prev => ({ ...prev, passed, score, incorrect: incorrects }));
+        setView('audit');
+      }
+
+      function handleAnswer(val) {
+        if (feedback) return;
+        const q = session.questions[session.index];
+        const isCorrect = q.type === 'fib'
+          ? String(val).toLowerCase().trim() === String(q.a).toLowerCase()
+          : val === q.a;
+
+        const nextScore = isCorrect ? session.score + 1 : session.score;
+        const nextIncorrect = isCorrect ? session.incorrect : [
+          ...session.incorrect,
+          {
+            q: q.q,
+            your: q.options ? q.options[val] : String(val),
+            correct: q.options ? q.options[q.a] : String(q.a),
+            statute: (CHAPTERS.find(c => c.questions.some(sq => sq.q === q.q))?.statute) || 'MN STATUTE'
+          }
+        ];
+
+        if (session.type === 'mock') {
+          checkTermination(nextScore, nextIncorrect);
+        } else {
+          setFeedback({ isCorrect, nextScore, nextIncorrect });
+        }
+      }
+
+      // ----------------- UI -----------------
+      return (
+        <div className="min-h-screen">
+          {/* Header / Auth Status */}
+          <div className="flex justify-between items-center mb-6 px-2">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+              {auth ? (user ? `Cloud Active: ${String(user.uid).substring(0, 8)}...` : 'Connecting...') : 'Auth disabled (no Firebase config)'}
+            </div>
+          </div>
+
+          {view === 'dash' && (
+            <div className="space-y-6 animate-slide-up">
+              <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl">
+                <p className="text-[10px] font-black tracking-widest opacity-40 uppercase mb-4">MN CLASS D MASTER</p>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <h1 className="text-5xl font-black">
+                      {Object.keys(certs).length}
+                      <span className="text-xl opacity-20">/{CHAPTERS.length}</span>
+                    </h1>
+                    <p className="text-[10px] font-bold uppercase text-blue-400">Chapters Certified</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <button onClick={() => startTest('mock')} className="bg-white p-6 rounded-[2rem] border border-slate-200 text-left active:scale-95 transition-all">
+                  <p className="font-black text-sm uppercase">State Mock</p>
+                  <p className="text-[10px] text-slate-400 font-bold">20 Q • 80% LIMIT</p>
+                </button>
+                <button onClick={() => startTest('practice')} className="bg-white p-6 rounded-[2rem] border border-slate-200 text-left active:scale-95 transition-all">
+                  <p className="font-black text-sm uppercase">50 Q Draw</p>
+                  <p className="text-[10px] text-slate-400 font-bold">RANDOM POOL</p>
+                </button>
+              </div>
+
+              {CHAPTERS.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => { setActiveChapter(c); setView('review'); }}
+                  className="w-full bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center active:scale-[0.98] transition-transform"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${certs[c.id] ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
+                      {certs[c.id] ? '✓' : c.id}
+                    </div>
+                    <div className="text-left">
+                      <p className="font-black text-slate-800 text-sm">{c.title}</p>
+                      <p className="text-[9px] text-slate-400 uppercase font-black">{c.manual}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {view === 'review' && activeChapter && (
+            <div className="space-y-6">
+              <button onClick={() => setView('dash')} className="text-[10px] font-black uppercase text-slate-400">← Back</button>
+              <div className="bg-white rounded-[2rem] p-8 border border-slate-200 space-y-4">
+                <h2 className="text-2xl font-black uppercase">{activeChapter.title}</h2>
+                <p className="text-sm text-slate-600 leading-relaxed">{activeChapter.content}</p>
+                <div className="bg-blue-50 p-4 rounded-2xl">
+                  <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Objective</p>
+                  <p className="text-sm font-bold text-blue-900">{activeChapter.insight}</p>
+                </div>
+              </div>
+              <button onClick={() => startTest('unit', activeChapter.id)} className="w-full bg-blue-600 text-white p-6 rounded-[1.5rem] font-black shadow-lg">START CERTIFICATION</button>
+            </div>
+          )}
+
+          {view === 'test' && session && (
+            <div className="space-y-6 pt-4">
+              <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase">
+                <span>Question {session.index + 1} / {session.questions.length}</span>
+                {session.type === 'mock' && <span className="text-red-500">Timer Active</span>}
+              </div>
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 text-center min-h-[150px] flex items-center justify-center">
+                <h3 className="text-xl font-black">{session.questions[session.index].q.replace('blank', '_______')}</h3>
+              </div>
+
+              {feedback ? (
+                <div className="space-y-4">
+                  <div className={`p-8 rounded-[2rem] border-2 text-center ${feedback.isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                    <p className="text-xl font-black">{feedback.isCorrect ? 'CORRECT' : 'INCORRECT'}</p>
+                    {!feedback.isCorrect && (
+                      <p className="text-sm mt-1">
+                        Answer: {feedback.nextIncorrect[feedback.nextIncorrect.length - 1].correct}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => checkTermination(feedback.nextScore, feedback.nextIncorrect)} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black">NEXT QUESTION</button>
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {session.questions[session.index].type === 'mc' && session.questions[session.index].options.map((opt, i) => (
+                    <button key={i} onClick={() => handleAnswer(i)} className="bg-white p-5 rounded-2xl border border-slate-200 text-left font-bold text-sm active:bg-blue-50">{opt}</button>
+                  ))}
+                  {session.questions[session.index].type === 'tf' && [true, false].map((v, i) => (
+                    <button key={i} onClick={() => handleAnswer(v)} className="bg-white p-6 rounded-2xl border border-slate-200 font-black text-lg">{v ? 'TRUE' : 'FALSE'}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {view === 'audit' && session && (
+            <div className="space-y-6 pt-6">
+              <div className="text-center">
+                <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${session.passed ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                  <span className="text-2xl font-bold">{session.passed ? '✓' : '×'}</span>
+                </div>
+                <h2 className="text-3xl font-black uppercase">{session.passed ? 'Certified' : 'Retry'}</h2>
+                <p className="text-[10px] font-black text-slate-400 mt-1">{session.score} / {session.questions.length} CORRECT</p>
+              </div>
+              <div className="space-y-3">
+                {session.incorrect.map((item, i) => (
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200">
+                    <p className="font-bold text-xs mb-2">{item.q}</p>
+                    <div className="text-[10px] text-blue-600 font-bold uppercase">{item.statute} • CORRECT: {item.correct}</div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setView('dash')} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black uppercase text-sm">Return to Dash</button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
