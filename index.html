@@ -1,307 +1,416 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  />
-  <title>MN Teen Driver Hub: GDL, Safety & Study</title>
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
-  <!-- Tailwind CSS (CDN) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js (for the dashboard charts) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+// --- FIREBASE INITIALIZATION ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'mn-class-d-master';
 
-  <!-- React 18 (UMD) for Study Hub -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Babel Standalone so we can write JSX in-browser (no bundler) -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet" />
-
-  <style>
-    body {
-      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-      background-color: #f8fafc; /* slate-50 */
-      color: #0f172a; /* slate-900 */
-      -webkit-font-smoothing: antialiased;
+// --- CURRICULUM DATA (MAPPED TO MN MANUAL & STATUTES) ---
+const CHAPTERS = [
+    {
+        id: 1, title: "YOUR LICENSE TO DRIVE", manual: "Chapter 1", statute: "Minn. Stat. § 171.05",
+        content: "The Minnesota Graduated Driver’s Licensing (GDL) system is a three-phase approach designed to ease inexperienced drivers into the driving environment. It includes the Instruction Permit, Provisional License, and Full Class D License.",
+        insight: "VETERAN INSIGHT: The 'Blue Card' is your proof of enrollment; don't lose it.",
+        questions: [
+            { type: 'mc', q: "AT WHAT AGE CAN YOU APPLY FOR AN MN INSTRUCTION PERMIT?", options: ["14", "15", "16", "18"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: UNDER VANESSA'S LAW, YOU CAN LOSE PRIVILEGES UNTIL AGE 18 FOR A CRASH-RELATED VIOLATION.", a: true },
+            { type: 'fib', q: "A PERMIT HOLDER MUST BE ACCOMPANIED BY A LICENSED DRIVER AT LEAST blank YEARS OLD.", a: "21" },
+            { type: 'mc', q: "HOW LONG MUST YOU HOLD AN INSTRUCTION PERMIT BEFORE TAKING A ROAD TEST IF UNDER 18?", options: ["3 MONTHS", "6 MONTHS", "9 MONTHS", "1 YEAR"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: ADOPTIVE PARENTS CANNOT SIGN A MINOR'S LICENSE APPLICATION.", a: false }
+        ]
+    },
+    {
+        id: 2, title: "YOUR VEHICLE", manual: "Chapter 2", statute: "Minn. Stat. § 169.46",
+        content: "Every vehicle operated on public streets must be equipped with specific safety features. All equipment must be in working order and meet legal standards for safety and visibility.",
+        insight: "VETERAN INSIGHT: Clean your headlights in winter; salt reduces visibility by 50%.",
+        questions: [
+            { type: 'mc', q: "MINIMUM LEGAL TIRE TREAD DEPTH IS:", options: ["1/32 INCH", "1/16 INCH", "1/8 INCH", "1/4 INCH"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: YOU MUST TURN ON HEADLIGHTS IF VISIBILITY IS LESS THAN 500 FEET.", a: true },
+            { type: 'fib', q: "HIGH BEAMS MUST BE DIMMED WHEN WITHIN blank FEET OF AN ONCOMING VEHICLE.", a: "1000" },
+            { type: 'mc', q: "WINDSHIELDS MUST NOT BE COMPOSED OF ANY MATERIAL THAT IS:", options: ["CLEAR", "TINTED ABOVE 50%", "FROSTED", "SHATTER-RESISTANT"], a: 2 },
+            { type: 'tf', q: "TRUE OR FALSE: BRAKES MUST BE CAPABLE OF STOPPING A CAR TRAVELING 20 MPH WITHIN 30 FEET.", a: true }
+        ]
+    },
+    {
+        id: 3, title: "TRAFFIC LAWS & OPERATION", manual: "Chapter 3", statute: "Minn. Stat. § 169.14",
+        content: "This chapter covers speed limits, turning, signaling, and the right-of-way. Minnesota's basic speed law requires drivers to drive at a speed that is reasonable for the current conditions.",
+        insight: "VETERAN INSIGHT: The 'Zipper Merge' reduces traffic backup by 40%. Use both lanes.",
+        questions: [
+            { type: 'mc', q: "THE SPEED LIMIT IN URBAN OR TOWN ROADS IS USUALLY:", options: ["20 MPH", "30 MPH", "45 MPH", "55 MPH"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: YOU MAY DRIVE OVER THE SPEED LIMIT TO PASS ON A TWO-LANE HIGHWAY WITH A 55+ MPH LIMIT.", a: true },
+            { type: 'fib', q: "YOU MUST SIGNAL YOUR INTENT TO TURN AT LEAST blank FEET BEFORE THE TURN.", a: "100" },
+            { type: 'mc', q: "YOU MAY NOT PASS WITHIN HOW MANY FEET OF AN INTERSECTION?", options: ["50 FEET", "100 FEET", "200 FEET", "500 FEET"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: PARKING IS PROHIBITED WITHIN 20 FEET OF A CROSSWALK AT AN INTERSECTION.", a: true }
+        ]
+    },
+    {
+        id: 4, title: "SHARING THE ROAD", manual: "Chapter 4", statute: "Minn. Stat. § 169.202",
+        content: "Drivers must share the road with pedestrians, bicycles, motorcycles, and commercial vehicles. Special attention is required for emergency vehicles and work zones.",
+        insight: "VETERAN INSIGHT: If a pedestrian enters a crosswalk, you MUST stop.",
+        questions: [
+            { type: 'mc', q: "WHEN PASSING A BICYCLE, YOU MUST MAINTAIN A CLEARANCE OF AT LEAST:", options: ["1 FOOT", "2 FEET", "3 FEET", "5 FEET"], a: 2 },
+            { type: 'tf', q: "TRUE OR FALSE: YOU MUST STOP AT LEAST 20 FEET FROM A SCHOOL BUS WITH FLASHING RED LIGHTS.", a: true },
+            { type: 'fib', q: "COMMERCIAL VEHICLES HAVE 'NO ZONES' OR BLIND SPOTS UP TO blank FEET BEHIND THEM.", a: "200" },
+            { type: 'mc', q: "EMERGENCY VEHICLES WITH SIRENS REQUIRE YOU TO PULL TO THE:", options: ["LEFT", "RIGHT", "NEAREST SHOULDER", "STOP IMMEDIATELY"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: MOTORCYCLES HAVE THE RIGHT TO A FULL LANE WIDTH.", a: true }
+        ]
+    },
+    {
+        id: 5, title: "SIGNS, SIGNALS & MARKINGS", manual: "Chapter 5", statute: "Minn. Stat. § 169.06",
+        content: "Traffic signs use color and shape to convey meaning. Standardized markings and signals provide guidance and ensure safety at intersections and throughout the roadway.",
+        insight: "VETERAN INSIGHT: An upside-down triangle is always a Yield sign.",
+        questions: [
+            { type: 'mc', q: "A STEADY YELLOW LIGHT MEANS:", options: ["PROCEED WITH CAUTION", "SPEED UP", "STOP IF YOU CAN DO SO SAFELY", "YIELD"], a: 2 },
+            { type: 'tf', q: "TRUE OR FALSE: A CENTER LANE WITH SOLID AND DASHED YELLOW LINES IS FOR LEFT TURNS ONLY.", a: true },
+            { type: 'fib', q: "A blank SHAPED SIGN IS USED EXCLUSIVELY FOR RAILROAD CROSSINGS.", a: "crossbuck" },
+            { type: 'mc', q: "WHAT COLOR ARE REGULATORY SIGNS?", options: ["YELLOW", "ORANGE", "WHITE", "GREEN"], a: 2 },
+            { type: 'tf', q: "TRUE OR FALSE: A FLASHING RED LIGHT SHOULD BE TREATED LIKE A STOP SIGN.", a: true }
+        ]
+    },
+    {
+        id: 6, title: "DRIVING CONDITIONS", manual: "Chapter 6", statute: "Minn. Stat. § 169.13",
+        content: "Environmental factors like weather, light, and road surface significantly affect vehicle control. Night driving and winter driving require specific adjustments to speed and following distance.",
+        insight: "VETERAN INSIGHT: Bridges freeze before roads. Don't use cruise control in rain/snow.",
+        questions: [
+            { type: 'mc', q: "DURING RAIN, HYDROPLANING CAN BEGIN AT SPEEDS AS LOW AS:", options: ["25 MPH", "35 MPH", "45 MPH", "55 MPH"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: YOU SHOULD USE HIGH BEAM HEADLIGHTS IN HEAVY FOG.", a: false },
+            { type: 'fib', q: "IF YOUR VEHICLE DRIFTS OFF THE PAVEMENT, DO NOT blank ON THE BRAKES.", a: "slam" },
+            { type: 'mc', q: "IN WINTER DRIVING, INCREASE YOUR FOLLOWING DISTANCE TO AT LEAST:", options: ["3 SECONDS", "5 SECONDS", "8 SECONDS", "10 SECONDS"], a: 3 },
+            { type: 'tf', q: "TRUE OR FALSE: IF YOUR BRAKES FAIL, YOU SHOULD PUMP THE BRAKE PEDAL RAPIDLY.", a: true }
+        ]
+    },
+    {
+        id: 7, title: "DRIVING PRIVILEGES", manual: "Chapter 7", statute: "Minn. Stat. § 171.17",
+        content: "Driving is a privilege, not a right. Your license can be suspended, revoked, or canceled for various violations, including safety-critical offenses and failure to pay child support.",
+        insight: "VETERAN INSIGHT: A 'Cancellation' means you lose the license as if you never had it.",
+        questions: [
+            { type: 'mc', q: "WHICH ACTION RESULTS IN MANDATORY REVOCATION?", options: ["SPEEDING", "PARKING TICKET", "DRIVING WHILE IMPAIRED", "LITTERING"], a: 2 },
+            { type: 'tf', q: "TRUE OR FALSE: YOUR LICENSE CAN BE SUSPENDED FOR TRUANCY IF YOU ARE UNDER 18.", a: true },
+            { type: 'fib', q: "THE REINSTATEMENT FEE FOR A REVOKED LICENSE (NON-DWI) IS $blank.", a: "30" },
+            { type: 'mc', q: "IF YOU CHANGE YOUR NAME OR ADDRESS, YOU MUST APPLY FOR A REPLACEMENT WITHIN:", options: ["10 DAYS", "30 DAYS", "60 DAYS", "90 DAYS"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: FLEEING A POLICE OFFICER IS A FELONY.", a: true }
+        ]
+    },
+    {
+        id: 8, title: "DWI LAWS", manual: "Chapter 8", statute: "Minn. Stat. § 169A.20",
+        content: "Alcohol and drugs impair judgment, vision, and reaction time. Minnesota's 'Implied Consent' law means by driving, you agree to chemical testing for impairment.",
+        insight: "VETERAN INSIGHT: The only thing that truly lowers BAC is time.",
+        questions: [
+            { type: 'mc', q: "THE LEGAL BAC LIMIT FOR DRIVERS OVER 21 IS:", options: ["0.02", "0.05", "0.08", "0.10"], a: 2 },
+            { type: 'tf', q: "TRUE OR FALSE: MINNESOTA'S 'NOT A DROP' POLICY APPLIES TO DRIVERS UNDER 21.", a: true },
+            { type: 'fib', q: "REFUSAL TO TAKE A BREATH TEST WILL RESULT IN REVOCATION FOR blank YEAR(S).", a: "1" },
+            { type: 'mc', q: "A FIRST DWI OFFENSE CAN INCLUDE A JAIL TERM UP TO:", options: ["30 DAYS", "90 DAYS", "1 YEAR", "5 YEARS"], a: 1 },
+            { type: 'tf', q: "TRUE OR FALSE: PRESCRIPTION DRUGS CAN RESULT IN A DWI CHARGE.", a: true }
+        ]
     }
+];
 
-    /* Mandatory Chart Container Styling */
-    .chart-container {
-      position: relative;
-      width: 100%;
-      max-width: 800px;
-      margin-left: auto;
-      margin-right: auto;
-      height: 40vh;
-      min-height: 300px;
-      max-height: 450px;
-      overflow: hidden;
-    }
+export default function App() {
+    // --- STATE ---
+    const [user, setUser] = useState(null);
+    const [view, setView] = useState('dash');
+    const [certs, setCerts] = useState({});
+    const [activeChapter, setActiveChapter] = useState(null);
+    const [session, setSession] = useState(null);
+    const [feedback, setFeedback] = useState(null);
+    const [timeLeft, setTimeLeft] = useState(1800);
+    const timerRef = useRef(null);
 
-    /* Smooth section transitions */
-    .view-section {
-      display: none;
-      opacity: 0;
-      transition: opacity 0.35s ease-in-out;
-    }
-    .view-section.active {
-      display: block;
-      opacity: 1;
-      animation: slideUp 0.45s ease-out forwards;
-    }
-    @keyframes slideUp {
-      from { transform: translateY(14px); opacity: 0; }
-      to   { transform: translateY(0);   opacity: 1; }
-    }
+    // --- AUTH (RULE 3) ---
+    useEffect(() => {
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+        initAuth();
+        return onAuthStateChanged(auth, setUser);
+    }, []);
 
-    /* Custom scrollbar for inner elements if needed */
-    .custom-scroll::-webkit-scrollbar { width: 6px; }
-    .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    // --- DATA SYNC (RULE 1 & 2) ---
+    useEffect(() => {
+        if (!user) return;
+        const progressDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'progress');
+        return onSnapshot(progressDoc, (snap) => {
+            if (snap.exists()) setCerts(snap.data().certified || {});
+        }, (err) => console.error("Sync error:", err));
+    }, [user]);
 
-    /* Unicode Icon Styling */
-    .u-icon { font-style: normal; display: inline-block; line-height: 1; }
+    const saveProgress = async (newCerts) => {
+        if (!user) return;
+        const progressDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'progress');
+        await setDoc(progressDoc, { certified: newCerts }, { merge: true });
+    };
 
-    /* Small helper for Study Hub */
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f1f5f9; border:1px solid #e2e8f0; border-bottom-width:2px; padding:.1rem .35rem; border-radius:.35rem;}
-  </style>
-</head>
+    // --- TIMER LOGIC ---
+    useEffect(() => {
+        if (session && session.type === 'mock' && !session.passed && !feedback) {
+            timerRef.current = setInterval(() => {
+                setTimeLeft(prev => {
+                    if (prev <= 1) {
+                        clearInterval(timerRef.current);
+                        endSession(false, session.score, session.incorrect);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } else {
+            clearInterval(timerRef.current);
+        }
+        return () => clearInterval(timerRef.current);
+    }, [session, feedback]);
 
-<body class="min-h-screen flex flex-col">
+    // --- GAME ENGINE ---
+    const startTest = (type, chapterId = null) => {
+        let pool = [];
+        if (type === 'unit') {
+            const c = CHAPTERS.find(x => x.id === chapterId);
+            pool = [...c.questions].sort(() => Math.random() - 0.5);
+        } else if (type === 'mock') {
+            pool = CHAPTERS.flatMap(c => c.questions).sort(() => Math.random() - 0.5).slice(0, 20);
+        } else {
+            pool = CHAPTERS.flatMap(c => c.questions).sort(() => Math.random() - 0.5).slice(0, 50);
+        }
 
-  <!-- Nav -->
-  <nav class="bg-white shadow-sm sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between h-16">
-        <div class="flex items-center">
-          <span class="text-2xl mr-2 u-icon">🚙</span>
-          <span class="font-bold text-xl text-blue-800 tracking-tight">MN Teen Driver Hub</span>
-        </div>
+        setTimeLeft(1800);
+        setSession({ 
+            type, chapterId, questions: pool, index: 0, score: 0, 
+            incorrect: [], startTime: Date.now(), passed: null 
+        });
+        setFeedback(null);
+        setView(type === 'unit' ? 'review' : 'test');
+    };
 
-        <!-- Desktop Nav -->
-        <div class="hidden md:flex space-x-1 sm:space-x-4 items-center" id="desktop-nav">
-          <button data-target="dashboard"     class="nav-btn px-3 py-2 rounded-md text-sm font-medium text-blue-700 bg-blue-50 transition-colors">Overview</button>
-          <button data-target="gdl-journey"   class="nav-btn px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">The GDL Journey</button>
-          <button data-target="rules-physics" class="nav-btn px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">Rules & Physics</button>
-          <button data-target="hazards"       class="nav-btn px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">Hazards & DUI</button>
-          <button data-target="study-hub"     class="nav-btn px-3 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">Study Hub</button>
-        </div>
+    const handleAnswer = (val) => {
+        if (feedback) return;
+        const q = session.questions[session.index];
+        const isCorrect = q.type === 'fib' 
+            ? val.toString().toLowerCase().trim() === q.a.toLowerCase()
+            : val === q.a;
 
-        <!-- Mobile menu -->
-        <div class="flex items-center md:hidden">
-          <button id="mobile-menu-btn" class="text-slate-600 hover:text-blue-600 focus:outline-none text-2xl">
-            ☰
-          </button>
-        </div>
-      </div>
-    </div>
+        const nextScore = isCorrect ? session.score + 1 : session.score;
+        const chapter = CHAPTERS.find(c => c.questions.some(sq => sq.q === q.q));
+        
+        const nextIncorrect = isCorrect ? session.incorrect : [...session.incorrect, {
+            q: q.q,
+            your: q.options ? q.options[val] : val,
+            correct: q.options ? q.options[q.a] : q.a,
+            statute: chapter?.statute || "MN STAT",
+            manual: chapter?.manual || "MN MANUAL"
+        }];
 
-    <!-- Mobile Nav -->
-    <div id="mobile-nav" class="md:hidden hidden bg-white border-t border-slate-100 shadow-md absolute w-full">
-      <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 flex flex-col">
-        <button data-target="dashboard"     class="nav-btn block px-3 py-2 rounded-md text-base font-medium text-blue-700 bg-blue-50 text-left">Overview</button>
-        <button data-target="gdl-journey"   class="nav-btn block px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-50 text-left">The GDL Journey</button>
-        <button data-target="rules-physics" class="nav-btn block px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-50 text-left">Rules & Physics</button>
-        <button data-target="hazards"       class="nav-btn block px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-50 text-left">Hazards & DUI</button>
-        <button data-target="study-hub"     class="nav-btn block px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-50 text-left">Study Hub</button>
-      </div>
-    </div>
-  </nav>
+        if (session.type === 'mock') {
+            // No immediate feedback for Mock Exam
+            evaluateTermination(nextScore, nextIncorrect);
+        } else {
+            setFeedback({ isCorrect, nextScore, nextIncorrect });
+        }
+    };
 
-  <!-- Main -->
-  <main class="flex-grow max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    const evaluateTermination = (score, incorrects) => {
+        const total = session.questions.length;
+        const target = Math.ceil(total * 0.8);
+        const failLimit = total - target + 1;
 
-    <!-- ============ DASHBOARD ============ -->
-    <section id="dashboard" class="view-section active">
-      <div class="mb-8">
-        <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Understanding the Road Ahead</h1>
-        <p class="text-lg text-slate-600 leading-relaxed max-w-4xl">
-          Welcome to the interactive companion for the Minnesota Class D Driver's Manual and Parent's Supervised Driving Program.
-          This hub transforms dense regulatory text and safety protocols into an explorable format. Before diving into the laws,
-          it is critical to understand <em>why</em> these systems exist. The data below highlights the primary factors
-          contributing to teen driver incidents, setting the context for the rules we must follow.
-        </p>
-      </div>
+        if (score >= target) {
+            endSession(true, score, incorrects);
+        } else if (incorrects.length >= failLimit || (session.index + 1) >= total) {
+            endSession(false, score, incorrects);
+        } else {
+            setSession({ ...session, index: session.index + 1, score, incorrect: incorrects });
+        }
+    };
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        <!-- Chart -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h2 class="text-xl font-bold text-slate-800 mb-2 border-b pb-2">Common Teen Crash Factors</h2>
-          <p class="text-sm text-slate-500 mb-4">Illustrative distribution of frequent contributors to novice driver incidents.</p>
-          <div class="chart-container">
-            <canvas id="crashFactorsChart"></canvas>
-          </div>
-        </div>
+    const endSession = (passed, score, incorrects) => {
+        if (passed && session.type === 'unit') {
+            const newCerts = { ...certs, [session.chapterId]: true };
+            setCerts(newCerts);
+            saveProgress(newCerts);
+        }
+        setSession(prev => ({ ...prev, passed, score, incorrect: incorrects }));
+        setView('audit');
+    };
 
-        <!-- Context -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6 h-full">
-          <div>
-            <h3 class="text-lg font-bold text-blue-800 flex items-center"><span class="u-icon mr-2 text-xl">⚠️</span> The Risk Profile</h3>
-            <p class="mt-2 text-slate-600 text-sm leading-relaxed">
-              Novice drivers face significantly higher crash risks during their first year of licensure. Inexperience with hazard anticipation,
-              combined with distractions (passengers, phones), leads to critical errors in judgment and vehicle control.
-            </p>
-          </div>
-          <div>
-            <h3 class="text-lg font-bold text-blue-800 flex items-center"><span class="u-icon mr-2 text-xl">🛡️</span> The Solution: GDL & Supervision</h3>
-            <p class="mt-2 text-slate-600 text-sm leading-relaxed">
-              Minnesota's Graduated Driver Licensing (GDL) program mandates <strong>50 hours</strong> of supervised practice (15 night)
-              and restricts high-risk scenarios (late-night driving, peer passengers) during the Provisional phase.
-            </p>
-          </div>
-          <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
-            <p class="text-sm text-blue-800 font-semibold">
-              “Even after your teen is licensed, keep riding along. Reinforce scanning, space cushions, and wise decisions under pressure.”
-              <br /><span class="text-xs font-normal text-blue-600">— Parent's Supervised Driving Program</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
+    const formatTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
-    <!-- ============ GDL JOURNEY ============ -->
-    <section id="gdl-journey" class="view-section">
-      <div class="mb-8">
-        <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">The Graduated Licensing System</h1>
-        <p class="text-lg text-slate-600 leading-relaxed max-w-4xl">
-          Minnesota law uses a phased approach to earning full driving privileges. This section breaks down the
-          requirements for the Instruction Permit, Provisional License, and full Class D License. Select a phase to explore rules,
-          restrictions, and parent responsibilities.
-        </p>
-      </div>
-
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8 relative">
-        <div class="flex flex-col md:flex-row justify-between items-center gap-4 relative">
-          <div class="hidden md:block absolute top-1/2 left-0 w-full h-1 bg-slate-200 -z-10 transform -translate-y-1/2"></div>
-
-          <button class="gdl-step w-full md:w-1/3 bg-slate-50 border-2 border-blue-500 rounded-xl p-4 text-center cursor-pointer hover:bg-blue-50 transition-colors relative z-10" data-phase="permit">
-            <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-2 font-bold">1</div>
-            <h3 class="font-bold text-slate-800">Instruction Permit</h3>
-            <p class="text-xs text-slate-500 mt-1">Age 15+</p>
-          </button>
-
-          <button class="gdl-step w-full md:w-1/3 bg-slate-50 border-2 border-transparent hover:border-slate-300 rounded-xl p-4 text-center cursor-pointer hover:bg-slate-100 transition-colors relative z-10" data-phase="provisional">
-            <div class="w-8 h-8 bg-amber-500 text-white rounded-full flex items-center justify-center mx-auto mb-2 font-bold">2</div>
-            <h3 class="font-bold text-slate-800">Provisional License</h3>
-            <p class="text-xs text-slate-500 mt-1">Age 16+</p>
-          </button>
-
-          <button class="gdl-step w-full md:w-1/3 bg-slate-50 border-2 border-transparent hover:border-slate-300 rounded-xl p-4 text-center cursor-pointer hover:bg-slate-100 transition-colors relative z-10" data-phase="full">
-            <div class="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center mx-auto mb-2 font-bold">3</div>
-            <h3 class="font-bold text-slate-800">Class D License</h3>
-            <p class="text-xs text-slate-500 mt-1">Age 18+ (or 12mo clean)</p>
-          </button>
-        </div>
-
-        <div id="gdl-content" class="mt-8 p-6 bg-slate-50 rounded-xl border border-slate-200 min-h-[250px]">
-          <!-- content populated by JS -->
-        </div>
-      </div>
-
-      <div class="bg-amber-50 border-l-4 border-amber-500 p-6 rounded-r-xl">
-        <h3 class="text-lg font-bold text-amber-900 flex items-center"><span class="u-icon mr-2">⚖️</span> Vanessa's Law (Minn. Stat. § 171.05)</h3>
-        <p class="mt-2 text-sm text-amber-800 leading-relaxed">
-          For unlicensed teens, a crash-related moving violation or alcohol/controlled substance violation can block licensure until 18.
-          At 18, they must pass knowledge testing, meet reinstatement requirements, and hold a permit for six months.
-        </p>
-      </div>
-    </section>
-
-    <!-- ============ RULES & PHYSICS ============ -->
-    <section id="rules-physics" class="view-section">
-      <div class="mb-8">
-        <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Traffic Laws & Physical Realities</h1>
-        <p class="text-lg text-slate-600 leading-relaxed max-w-4xl">
-          Knowing posted limits is only part of safe driving. Explore the relationship between speed,
-          human perception-reaction, and braking on different surfaces. Review lane control and right‑of‑way scenarios that commonly trip up new drivers.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <!-- Chart -->
-        <div class="lg:col-span-7 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h2 class="text-xl font-bold text-slate-800 mb-1">The Physics of Stopping</h2>
-          <p class="text-sm text-slate-500 mb-4">Perception + Reaction + Braking distances increase rapidly with speed.</p>
-          <div class="chart-container">
-            <canvas id="stoppingDistanceChart"></canvas>
-          </div>
-          <p class="text-xs text-slate-400 mt-4 text-center">*Distances are approximate for average drivers on dry pavement.</p>
-        </div>
-
-        <!-- Law cards -->
-        <div class="lg:col-span-5 space-y-4">
-          <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            <h3 class="font-bold text-slate-800 text-lg flex items-center"><span class="u-icon mr-2 text-xl">⏱️</span> The Basic Speed Law</h3>
-            <p class="text-sm text-slate-600 mt-2">
-              Statutory limits (10 mph alleys, 30 mph urban, 55 mph rural) apply when signs are absent. But the Basic Speed Law requires that you never drive faster than is <em>reasonable under existing conditions</em> (traffic, weather, visibility, surface).
-            </p>
-          </div>
-
-          <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            <h3 class="font-bold text-slate-800 text-lg flex items-center"><span class="u-icon mr-2 text-xl">🔀</span> The Zipper Merge</h3>
-            <p class="text-sm text-slate-600 mt-2">
-              When a lane ends in congestion, stay in your lane up to the merge point, then alternate one‑for‑one. Early merging creates turbulence and longer backups.
-            </p>
-            <button id="btn-zipper" class="mt-3 text-sm font-semibold text-blue-600 hover:text-blue-800 underline">Show Scenario</button>
-            <div id="scenario-zipper" class="hidden mt-3 p-3 bg-blue-50 text-blue-800 text-sm rounded border border-blue-100">
-              <strong>Scenario:</strong> “Right Lane Ends 1 Mile.” <br />
-              <strong>Action:</strong> Stay in the right lane, drive to the merge point, and take turns.
+    return (
+        <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans pb-10">
+            {/* Nav Header */}
+            <div className="bg-white p-4 flex justify-between items-center border-b sticky top-0 z-10">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black">D</div>
+                    <span className="font-black text-xs tracking-tighter uppercase">Class D Master</span>
+                </div>
+                <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
+                    ID: {user?.uid.substring(0, 8) || '...'}
+                </div>
             </div>
-          </div>
 
-          <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            <h3 class="font-bold text-slate-800 text-lg flex items-center"><span class="u-icon mr-2 text-xl">🛑</span> Uncontrolled Intersections</h3>
-            <p class="text-sm text-slate-600 mt-2">
-              When two vehicles arrive simultaneously at an uncontrolled intersection, the driver on the left yields to the driver on the right. Scan early, communicate intentions, and proceed cautiously.
-            </p>
-          </div>
+            {view === 'dash' && (
+                <div className="p-6 space-y-6">
+                    <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl">
+                        <p className="text-[10px] font-black tracking-widest opacity-40 uppercase mb-4">Your Progress</p>
+                        <div className="flex justify-between items-end">
+                            <div>
+                                <h1 className="text-5xl font-black">{Object.keys(certs).length}<span className="text-xl opacity-20">/{CHAPTERS.length}</span></h1>
+                                <p className="text-[10px] font-bold uppercase text-blue-400">Chapters Certified</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <button onClick={() => startTest('mock')} className="bg-white p-6 rounded-[2rem] border border-slate-200 text-left active:scale-95 transition-all shadow-sm">
+                            <p className="font-black text-sm uppercase">State Mock</p>
+                            <p className="text-[9px] text-red-500 font-bold">20 Q • 30 MIN</p>
+                        </button>
+                        <button onClick={() => startTest('practice')} className="bg-white p-6 rounded-[2rem] border border-slate-200 text-left active:scale-95 transition-all shadow-sm">
+                            <p className="font-black text-sm uppercase">Practice</p>
+                            <p className="text-[9px] text-slate-400 font-bold">50 Q DRAW</p>
+                        </button>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h3 className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Training Units</h3>
+                        {CHAPTERS.map(c => (
+                            <button 
+                                key={c.id} 
+                                onClick={() => { setActiveChapter(c); setView('review'); }}
+                                className="w-full bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center active:scale-[0.98] transition-transform shadow-sm"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${certs[c.id] ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
+                                        {certs[c.id] ? '✓' : c.id}
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="font-black text-slate-800 text-xs uppercase leading-none mb-1">{c.title}</p>
+                                        <p className="text-[8px] text-slate-400 font-bold">{c.manual} • {c.statute}</p>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {view === 'review' && (
+                <div className="p-6 animate-slide-up">
+                    <button onClick={() => setView('dash')} className="mb-4 text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">← Return to Dashboard</button>
+                    <div className="bg-white rounded-[2rem] p-8 border border-slate-200 space-y-6 shadow-sm">
+                        <div>
+                            <p className="text-[10px] font-black text-blue-600 uppercase mb-2 tracking-widest">Unit Summary</p>
+                            <h2 className="text-3xl font-black leading-none uppercase mb-4">{activeChapter.title}</h2>
+                            <p className="text-sm text-slate-600 leading-relaxed font-medium">{activeChapter.content}</p>
+                        </div>
+                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                            <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Veteran Strategy</p>
+                            <p className="text-sm font-bold text-blue-900 leading-snug">{activeChapter.insight}</p>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-xl text-[10px] font-bold text-slate-500 uppercase">
+                            Certification requires 80% accuracy on a 5-question pull.
+                        </div>
+                    </div>
+                    <button onClick={() => startTest('unit', activeChapter.id)} className="w-full mt-6 bg-blue-600 text-white p-6 rounded-[1.5rem] font-black shadow-lg active:scale-95 transition-transform uppercase tracking-widest">Start Certification</button>
+                </div>
+            )}
+
+            {view === 'test' && (
+                <div className="p-6 space-y-6">
+                    <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <span>Q {session.index + 1} / {session.questions.length}</span>
+                        {session.type === 'mock' && <span className="text-red-600 bg-red-50 px-3 py-1 rounded-full animate-pulse">{formatTime(timeLeft)} Remaining</span>}
+                    </div>
+
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 min-h-[180px] flex items-center justify-center text-center">
+                        <h3 className="text-xl font-black leading-tight">
+                            {session.questions[session.index].q.replace('blank', '_______')}
+                        </h3>
+                    </div>
+
+                    {feedback ? (
+                        <div className="space-y-4">
+                            <div className={`p-8 rounded-[2rem] border-2 text-center ${feedback.isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                                <p className="text-xl font-black tracking-widest">{feedback.isCorrect ? 'MASTERED' : 'NOT QUITE'}</p>
+                                {!feedback.isCorrect && (
+                                    <div className="mt-2 text-xs font-bold space-y-1">
+                                        <p>Correct: {feedback.nextIncorrect[feedback.nextIncorrect.length-1].correct}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <button onClick={() => evaluateTermination(feedback.nextScore, feedback.nextIncorrect)} className="w-full bg-slate-900 text-white p-6 rounded-[1.5rem] font-black uppercase tracking-widest">Continue</button>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3">
+                            {session.questions[session.index].type === 'mc' && session.questions[session.index].options.map((opt, i) => (
+                                <button key={i} onClick={() => handleAnswer(i)} className="bg-white p-6 rounded-2xl border border-slate-200 text-left font-black text-sm active:bg-blue-50 active:border-blue-300 transition-colors uppercase leading-tight shadow-sm">{opt}</button>
+                            ))}
+                            {session.questions[session.index].type === 'tf' && [true, false].map((v, i) => (
+                                <button key={i} onClick={() => handleAnswer(v)} className="bg-white p-7 rounded-2xl border border-slate-200 font-black text-lg active:bg-blue-50 active:border-blue-300 shadow-sm">{v ? 'TRUE' : 'FALSE'}</button>
+                            ))}
+                            {session.questions[session.index].type === 'fib' && (
+                                <div className="space-y-4">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Type your answer..."
+                                        className="w-full p-6 rounded-2xl border border-slate-200 text-center font-black uppercase text-xl focus:outline-blue-500"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAnswer(e.target.value)}
+                                        autoFocus
+                                    />
+                                    <p className="text-center text-[10px] font-bold text-slate-400 uppercase">Press Enter to Submit</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {view === 'audit' && (
+                <div className="p-6 space-y-6 pb-20">
+                    <div className="text-center">
+                        <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4 shadow-inner ${session.passed ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                            <span className="text-3xl font-black">{session.passed ? '✓' : '×'}</span>
+                        </div>
+                        <h2 className="text-4xl font-black uppercase leading-none">{session.passed ? 'Certified' : 'Fail'}</h2>
+                        <p className="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">{session.score} / {session.questions.length} CORRECT • {Math.round((session.score/session.questions.length)*100)}% Mastery</p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">Error Audit & Rationale</h3>
+                        {session.incorrect.length === 0 ? (
+                            <div className="bg-green-50 p-8 rounded-[2rem] text-center border border-green-100">
+                                <p className="font-black text-green-700 uppercase">Perfect Performance</p>
+                                <p className="text-[10px] text-green-600 font-bold">No errors detected in this session.</p>
+                            </div>
+                        ) : (
+                            session.incorrect.map((item, i) => (
+                                <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                    <p className="font-black text-sm mb-3 leading-tight uppercase tracking-tight">{item.q}</p>
+                                    <div className="flex gap-2 mb-3">
+                                        <div className="bg-red-50 text-red-600 text-[10px] font-black px-2 py-1 rounded">YOURS: {item.your}</div>
+                                        <div className="bg-green-50 text-green-600 text-[10px] font-black px-2 py-1 rounded">GOAL: {item.correct}</div>
+                                    </div>
+                                    <div className="pt-3 border-t border-slate-100">
+                                        <p className="text-[9px] font-black text-blue-600 uppercase tracking-wider">{item.statute}</p>
+                                        <p className="text-[8px] font-bold text-slate-400 uppercase">{item.manual} Reference</p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <button onClick={() => window.print()} className="bg-white p-5 rounded-2xl border border-slate-200 font-black uppercase text-xs shadow-sm">Print Audit</button>
+                        <button onClick={() => setView('dash')} className="bg-slate-900 text-white p-5 rounded-2xl font-black uppercase text-xs shadow-lg">Dashboard</button>
+                    </div>
+                </div>
+            )}
         </div>
-      </div>
-    </section>
-
-    <!-- ============ HAZARDS & DUI ============ -->
-    <section id="hazards" class="view-section">
-      <div class="mb-8">
-        <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Hazards, Sharing the Road & Impairment</h1>
-        <p class="text-lg text-slate-600 leading-relaxed max-w-4xl">
-          Protect vulnerable road users and recognize how impairment degrades performance long before obvious signs appear.
-          Review truck No‑Zones, school bus law, hydroplaning, and BAC effects.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <!-- BAC Chart -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h2 class="text-xl font-bold text-slate-800 mb-1">Blood Alcohol Concentration (BAC) Effects</h2>
-          <p class="text-sm text-slate-500 mb-4">Judgment and hazard detection degrade quickly as BAC rises—well before 0.08.</p>
-          <div class="chart-container">
-            <canvas id="bacChart"></canvas>
-          </div>
-        </div>
-
-        <!-- Share the road -->
-        <div class="space-y-4">
-          <div class="bg-red-50 p-5 rounded-2xl border border-red-100">
-            <h3 class="font-bold text-red-900 text-lg">DWI & “Not a Drop”</h3>
-            <p class="text-sm text-red-800 mt-2">
-              Legal limit for 21+ is 0.08. For under 21, “Not a Drop” means any detectable alcohol results in penalties.
-              Implied Consent: refusal to test triggers license consequences.
-            </p>
-          </div>
-
-          <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 text-white">
-            <h3 class="font-bold text-lg flex items-center"><span class="u-icon mr-2">🚛</span> Trucks & No‑Zones</h3>
-            <p class="text-sm text-slate-300 mt-2">
-              Large trucks have deep blind spots (front, rear, and both sides). If you can’t see the driver’s face in the mirror, they can’t see you. Give wide berth; never pass a turning truck on the right.
-            </p>
-          </div>
-
-          <div class="bg-blue-50 p-5 rounded-2xl border border-blue-100">
-            <h3 class="font-bold text-blue-900 text-lg flex items-center"><span class="u-icon mr-2">🌧️</span> Hydroplaning</h3>
-            <p class="text-sm text-blue-800 mt-2">
+    );
+}
